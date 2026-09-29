@@ -1,0 +1,46 @@
+name: ICVC proposal alerts
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch:          # lets you run it by hand from the Actions tab
+    inputs:
+      test:
+        description: "Send a test message with the latest proposal"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write             # needed to save state/last_seen.json
+
+concurrency:
+  group: icvc-proposals
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check for new ICVC proposals
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_MENTION_IDS: ${{ secrets.SLACK_MENTION_IDS }}
+        run: |
+          if [ "${{ inputs.test }}" = "true" ]; then
+            python notify.py --test
+          else
+            python notify.py
+          fi
+
+      - name: Save state
+        run: |
+          git config user.name  "icvc-proposal-bot"
+          git config user.email "icvc-proposal-bot@users.noreply.github.com"
+          git add state/last_seen.json
+          git diff --cached --quiet || (git commit -m "Update last seen ICVC proposal" && git push)
